@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-16"?>
+<!DOCTYPE tmx SYSTEM "tmx14.dtd">
+<tmx version="1.4">
+<header creationtool="MemoQ" creationtoolversion="11.2.8" segtype="sentence" adminlang="en-us" creationid="david" srclang="en-ca" o-tmf="MemoQTM" datatype="unknown">
+  <prop type="defclient"> </prop>
+  <prop type="defproject"> </prop>
+  <prop type="defdomain"> </prop>
+  <prop type="defsubject"> </prop>
+  <prop type="description"> </prop>
+  <prop type="targetlang">fr-ca</prop>
+  <prop type="name">Sample Translation Memory</prop>
+</header>
+<body>
+  <tu changedate="20240112T155242Z" creationdate="20231208T190818Z" creationid="John Smith" changeid="Jane Doe">
+    <prop type="client">C000274</prop>
+    <prop type="domain">Technical</prop>
+    <tuv xml:lang="en-ca">
+      <seg>Hello World</seg>
+    </tuv>
+    <tuv xml:lang="fr-ca">
+      <seg>Bonjour le monde</seg>
+    </tuv>
+  </tu>
+  <tu changedate="20240113T155242Z" creationdate="20231208T190818Z" creationid="John Smith" changeid="Jane Doe">
+    <prop type="client">C000274</prop>
+    <prop type="domain">Technical</prop>
+    <tuv xml:lang="en-ca">
+      <seg>Hello World</seg>
+    </tuv>
+    <tuv xml:lang="fr-ca">
+      <seg>Bonjour le monde</seg>
+    </tuv>
+  </tu>
+</body>
+</tmx>
