@@ -49,3 +49,36 @@ export function extractTUContent(tu) {
     changeDate: tu['@_changedate'] || '-'
   };
 }
+
+export function isValidTU(tu) {
+  if (!tu || !Array.isArray(tu.tuv) || tu.tuv.length !== 2) {
+    return false;
+  }
+
+  return tu.tuv.every(tuv => 
+    tuv &&
+    tuv['@_xml:lang'] &&
+    typeof tuv.seg === 'string' &&
+    tuv.seg.trim().length > 0
+  );
+}
+
+function getTUText(tu, langPrefix) {
+  const tuv = tu.tuv.find(t => 
+    t['@_xml:lang'].toLowerCase().startsWith(langPrefix.toLowerCase())
+  );
+  
+  if (!tuv?.seg) {
+    throw new Error(`Missing ${langPrefix} text`);
+  }
+  
+  return tuv.seg.trim();
+}
+
+export function normalizeTUText(text) {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .replace(/[.,!?;:]/g, ''); // Remove common punctuation
+}
