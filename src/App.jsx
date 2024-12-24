@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { Toaster, toast } from 'react-hot-toast'
 import FileUpload from './components/FileUpload'
 import PrioritySelector from './components/PrioritySelector'
@@ -17,8 +17,15 @@ function App() {
   const [duplicates, setDuplicates] = useState(null)
   const [processing, setProcessing] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
-  const [progress, setProgress] = useState({ type: null, current: 0, total: 0 })
+  const [progress, setProgress] = useState({
+    phase: null,
+    type: null,
+    current: 0,
+    total: 0,
+    message: ''
+  })
   const completedSteps = useRef(new Set())
+  const workerRef = useRef(null)
   
   const [priorities, setPriorities] = useState({
     creationId: [],
@@ -36,6 +43,64 @@ function App() {
     tagStrictness: 'permissive'
   })
 
+  // Cleanup worker on unmount
+  useEffect(() => {
+    return () => {
+      if (workerRef.current) {
+        workerRef.current.terminate()
+      }
+    }
+  }, [])
+
+  // Listen for progress events from different processes
+  useEffect(() => {
+    const handleFileProgress = (event) => {
+      const { phase, progress } = event.detail;
+      setProgress(prev => ({
+        ...prev,
+        phase,
+        current: progress,
+        total: 100,
+        type: 'loading',
+        message: getProgressMessage(phase)
+      }))
+    }
+
+    const handleTMXProgress = (event) => {
+      const { phase, progress } = event.detail;
+      setProgress(prev => ({
+        ...prev,
+        phase,
+        current: progress,
+        total: 100,
+        type: 'processing',
+        message: getProgressMessage(phase)
+      }))
+    }
+
+    window.addEventListener('fileProcessProgress', handleFileProgress)
+    window.addEventListener('tmxProcessProgress', handleTMXProgress)
+
+    return () => {
+      window.removeEventListener('fileProcessProgress', handleFileProgress)
+      window.removeEventListener('tmxProcessProgress', handleTMXProgress)
+    }
+  }, [])
+
+  const getProgressMessage = (phase) => {
+    switch (phase) {
+      case 'reading': return 'Reading file...'
+      case 'detecting': return 'Detecting encoding...'
+      case 'decoding': return 'Decoding content...'
+      case 'parsing': return 'Parsing TMX content...'
+      case 'analyzing': return 'Analyzing duplicates...'
+      case 'filtering': return 'Filtering duplicates...'
+      case 'processing': return 'Processing TMX file...'
+      case 'finalizing': return 'Finalizing...'
+      default: return 'Processing...'
+    }
+  }
+
   const updateStepCompletion = useCallback((step, isComplete) => {
     if (isComplete) {
       completedSteps.current.add(step)
@@ -50,13 +115,25 @@ function App() {
   const handleFileSelect = useCallback(async (file) => {
     try {
       setInputFile(file)
-      setProgress({ type: 'loading', current: 0, total: 100 })
+      setProgress({
+        phase: 'reading',
+        type: 'loading',
+        current: 0,
+        total: 100,
+        message: 'Reading file...'
+      })
       
       const result = await processTMXFile(file)
       setMetadata(result.metadata)
       setTmxData(result.content)
       
-      setProgress({ type: null, current: 0, total: 0 })
+      setProgress({
+        phase: 'complete',
+        type: null,
+        current: 0,
+        total: 0,
+        message: ''
+      })
       updateStepCompletion(1, true)
       toast.success('TMX file loaded successfully')
     } catch (error) {
@@ -65,6 +142,13 @@ function App() {
       setInputFile(null)
       setMetadata(null)
       setTmxData(null)
+      setProgress({
+        phase: 'error',
+        type: null,
+        current: 0,
+        total: 0,
+        message: error.message
+      })
     }
   }, [updateStepCompletion])
 
@@ -88,22 +172,39 @@ function App() {
 
     try {
       setProcessing(true)
-      setProgress({ type: 'analyzing', current: 0, total: tmxData.tmx.body.tu.length })
+      setProgress({
+        phase: 'analyzing',
+        type: 'analyzing',
+        current: 0,
+        total: tmxData.tmx.body.tu.length,
+        message: 'Analyzing duplicates...'
+      })
 
-      const worker = new Worker(new URL('./utils/worker.js', import.meta.url))
+      // Cleanup previous worker if exists
+      if (workerRef.current) {
+        workerRef.current.terminate()
+      }
+
+      workerRef.current = new Worker(new URL('./utils/worker.js', import.meta.url))
       
-      worker.onmessage = (e) => {
+      workerRef.current.onmessage = (e) => {
         const { type, data } = e.data
         
         switch (type) {
           case 'progress':
-            setProgress(prev => ({ ...prev, current: data.processed }))
+            setProgress(prev => ({
+              ...prev,
+              current: data.processed,
+              ...(data.phase && { phase: data.phase }),
+              ...(data.subProgress && { subProgress: data.subProgress })
+            }))
             break
           case 'complete':
             setDuplicates(data)
             updateStepCompletion(3, true)
             setProcessing(false)
-            worker.terminate()
+            workerRef.current.terminate()
+            workerRef.current = null
             toast.success(`Found ${data.length} segments to analyze`)
             break
           case 'error':
@@ -111,7 +212,7 @@ function App() {
         }
       }
 
-      worker.postMessage({
+      workerRef.current.postMessage({
         type: 'analyzeDuplicates',
         data: { tmxData, priorities, options }
       })
@@ -119,6 +220,13 @@ function App() {
       console.error('Analysis error:', error)
       toast.error('Failed to analyze duplicates')
       setProcessing(false)
+      setProgress({
+        phase: 'error',
+        type: null,
+        current: 0,
+        total: 0,
+        message: error.message
+      })
     }
   }, [tmxData, priorities, options, updateStepCompletion])
 
@@ -135,7 +243,13 @@ function App() {
 
     try {
       setProcessing(true)
-      setProgress({ type: 'processing', current: 0, total: tmxData.tmx.body.tu.length })
+      setProgress({
+        phase: 'processing',
+        type: 'processing',
+        current: 0,
+        total: tmxData.tmx.body.tu.length,
+        message: 'Processing TMX file...'
+      })
 
       const result = await processTMX(inputFile, priorities, duplicates)
       
@@ -154,11 +268,24 @@ function App() {
     } catch (error) {
       console.error('Processing error:', error)
       toast.error(error.message)
+      setProgress({
+        phase: 'error',
+        type: null,
+        current: 0,
+        total: 0,
+        message: error.message
+      })
     } finally {
       setProcessing(false)
-      setProgress({ type: null, current: 0, total: 0 })
     }
   }, [inputFile, duplicates, tmxData, priorities, updateStepCompletion])
+
+  const getProgressLabel = useCallback(() => {
+    if (progress.phase === 'error') {
+      return `Error: ${progress.message}`
+    }
+    return progress.message || getProgressMessage(progress.phase)
+  }, [progress.phase, progress.message])
 
   return (
     <div className="min-h-screen bg-[#1e1e1e] text-[#676767] font-sans">
@@ -183,7 +310,7 @@ function App() {
                 <ProgressBar 
                   progress={progress.current}
                   total={progress.total}
-                  label="Loading TMX file..."
+                  label={getProgressLabel()}
                 />
               </div>
             )}
@@ -243,7 +370,7 @@ function App() {
                 <ProgressBar 
                   progress={progress.current}
                   total={progress.total}
-                  label="Analyzing duplicates..."
+                  label={getProgressLabel()}
                 />
               )}
 
@@ -276,7 +403,7 @@ function App() {
                 <ProgressBar 
                   progress={progress.current}
                   total={progress.total}
-                  label="Processing TMX file..."
+                  label={getProgressLabel()}
                 />
               )}
             </div>
