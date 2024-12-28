@@ -7,8 +7,12 @@ export function parseTMX(content) {
     parseAttributeValue: false,
     parseNodeValue: false,
     trimValues: false,
-    isArray: (name) => ['tu', 'tuv', 'prop'].includes(name)
+    isArray: (name) => ['tu', 'tuv', 'prop'].includes(name),
   });
-  
-  return parser.parse(content);
+
+  try {
+    return parser.parse(content);
+  } catch (error) {
+    throw new Error(`Error while parsing TMX content: ${error.message}`);
+  }
 }
