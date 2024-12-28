@@ -21,7 +21,7 @@ export async function processTMXFile(file, onProgress) {
     window.addEventListener('unload', handleAbort);
 
     // Detect encoding from first chunk
-    const encodingSample = await readFileSlice(file, 0, Math.min(CHUNK_SIZE, file.size), abortController.signal);
+    let encodingSample = await readFileSlice(file, 0, Math.min(CHUNK_SIZE, file.size), abortController.signal);
     if (!encodingSample) {
       throw new Error('Failed to read file sample for encoding detection');
     }
@@ -30,6 +30,8 @@ export async function processTMXFile(file, onProgress) {
     if (!encoding) {
       throw new Error('Unable to detect file encoding');
     }
+
+    encodingSample = null; // Allow GC
 
     // Initialize streaming parser with abort support
     const parser = new AdaptiveTMXStreamParser(onProgress, abortController.signal);
@@ -41,7 +43,7 @@ export async function processTMXFile(file, onProgress) {
         throw new Error('Processing aborted');
       }
 
-      const chunk = await readFileSlice(
+      let chunk = await readFileSlice(
         file, 
         position, 
         Math.min(position + CHUNK_SIZE, file.size),
@@ -52,7 +54,7 @@ export async function processTMXFile(file, onProgress) {
         throw new Error(`Failed to read chunk at position ${position}`);
       }
 
-      const decodedChunk = await decodeBuffer(chunk, encoding);
+      let decodedChunk = await decodeBuffer(chunk, encoding);
       if (!decodedChunk) {
         throw new Error(`Failed to decode chunk at position ${position}`);
       }
@@ -209,7 +211,6 @@ class AdaptiveTMXStreamParser {
       console.warn('No TUs processed in current batch');
     }
 
-    // Adjust batch size based on memory usage
     currentBatchSize = Math.floor(this.currentBatch.length * (MAX_BATCH_MEMORY / this.currentBatchSize));
     await cleanupMemory();
   }
