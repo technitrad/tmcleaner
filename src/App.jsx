@@ -144,10 +144,13 @@ function App() {
   }, [])
 
   const handleAnalyzeDuplicates = useCallback(async () => {
+    console.log('Analyze button clicked');
     if (!tmxData) {
       toast.error('Please select a TMX file first');
       return;
     }
+
+    console.log('TMX data exists:', tmxData.tmx?.body?.tu?.length);
 
     if (!tmxData.tmx?.body?.tu) {
       toast.error('Invalid TMX structure');
@@ -155,13 +158,16 @@ function App() {
     }
 
     try {
+      console.log('Starting analysis process');
       cleanupResources();
       setProcessing(true);
 
       const worker = new Worker(new URL('./utils/worker.js', import.meta.url));
+      console.log('Worker created');
       activeWorker.current = worker;
 
       worker.onmessage = (e) => {
+        console.log('Worker message received:', e.data);
         const { type, data } = e.data;
         
         if (!type || !data) {

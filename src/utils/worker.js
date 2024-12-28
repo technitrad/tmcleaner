@@ -5,10 +5,12 @@ const MAX_BATCH_MEMORY = 1.5 * 1024 * 1024; // 1.5MB per batch
 let currentBatchSize = 2000; // Initial batch size, will adjust dynamically
 
 self.onmessage = async function(e) {
+  console.log('Worker received message:', e.data);  // ADD THIS LINE
   const { type, data } = e.data;
 
   if (type === 'analyzeDuplicates') {
     try {
+      console.log('Starting duplicate analysis in worker');  // ADD THIS LINE
       if (!data || !data.tmxData || !data.priorities || !data.options) {
         throw new Error('Invalid input data for duplicate analysis');
       }
