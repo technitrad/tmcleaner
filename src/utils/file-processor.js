@@ -6,12 +6,14 @@ const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB chunks
 const MAX_BATCH_MEMORY = 1.5 * 1024 * 1024; // 1.5MB max batch memory
 let currentBatchSize = 1000; // Will adjust dynamically
 
+// Moved cleanupHandles to module scope
+const cleanupHandles = new Set();
+
 export async function processTMXFile(file, onProgress) {
   if (!file) {
     throw new Error('No file provided for processing');
   }
 
-  const cleanupHandles = new Set();
   let worker = null;
   const abortController = new AbortController();
 
